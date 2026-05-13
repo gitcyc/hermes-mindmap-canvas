@@ -59,6 +59,7 @@ Files to review:
 - docs/use-cases-v0.2.md
 - docs/technical-design-v0.2.md
 - docs/test-plan-v0.2.md
+- docs/v0.2-plan.md
 - app.py
 - static/index.html
 

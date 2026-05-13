@@ -121,8 +121,8 @@ As a user, I want to edit node label, status, notes, priority, type, owner, and 
 ### 4.4 Search nodes
 ### 4.4 搜索节点
 
-As a user, I want to search nodes by label, notes, owner, type, or status.
-作为用户，我希望可以按 label、notes、owner、type 或 status 搜索节点。
+As a user, I want to search nodes by label, notes, status, priority, type, owner, source, or attachment names.
+作为用户，我希望可以按 label、notes、status、priority、type、owner、source 或附件名称搜索节点。
 
 ### 4.5 Export Markdown
 ### 4.5 导出 Markdown
