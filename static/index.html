@@ -81,6 +81,53 @@
       opacity: 0.85;
       color: #d1d5db;
     }
+
+    .node-notes-preview {
+      font-size: 12px;
+      margin-top: 6px;
+      color: #9ca3af;
+      line-height: 1.4;
+      max-height: 36px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .node-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+    }
+
+    .badge {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: #374151;
+      color: #e5e7eb;
+    }
+
+    .badge-priority-low { background: #065f46; color: #6ee7b7; }
+    .badge-priority-medium { background: #92400e; color: #fcd34d; }
+    .badge-priority-high { background: #991b1b; color: #fca5a5; }
+    .badge-priority-urgent { background: #7c2d12; color: #fdba74; }
+    .badge-type { background: #1e3a8a; color: #93c5fd; }
+    .badge-owner { background: #4c1d95; color: #c4b5fd; }
+    .badge-source { background: #365314; color: #bef264; }
+
+    .node-attachments {
+      margin-top: 6px;
+      font-size: 11px;
+      color: #60a5fa;
+    }
+
+    .attachment-item {
+      display: inline-block;
+      margin-right: 6px;
+      padding: 2px 6px;
+      background: #1e3a8a;
+      border-radius: 4px;
+    }
   </style>
 </head>
 
@@ -127,20 +174,64 @@ function nodeStyle(status) {
   return {...base, background: "#374151", borderColor: "#9ca3af"};
 }
 
+function priorityClass(priority) {
+  if (!priority) return "";
+  return `badge-priority-${priority}`;
+}
+
+function renderBadges(n) {
+  const badges = [];
+  if (n.priority) {
+    badges.push(<span key="priority" className={`badge ${priorityClass(n.priority)}`}>{n.priority}</span>);
+  }
+  if (n.type) {
+    badges.push(<span key="type" className="badge badge-type">{n.type}</span>);
+  }
+  if (n.owner) {
+    badges.push(<span key="owner" className="badge badge-owner">{n.owner}</span>);
+  }
+  if (n.source) {
+    badges.push(<span key="source" className="badge badge-source">{n.source}</span>);
+  }
+  if (badges.length === 0) return null;
+  return <div className="node-badges">{badges}</div>;
+}
+
+function renderAttachments(n) {
+  const attachments = n.attachments || [];
+  if (attachments.length === 0) return null;
+  return (
+    <div className="node-attachments">
+      {attachments.map((a, i) => (
+        <span key={i} className="attachment-item">{a.name || "file"}</span>
+      ))}
+    </div>
+  );
+}
+
 function toFlowNodes(map) {
-  return (map.nodes || []).map(n => ({
-    id: n.id,
-    position: { x: Number(n.x || 0), y: Number(n.y || 0) },
-    data: {
-      label: (
-        <div>
-          <div className="node-label">{n.label || n.id}</div>
-          <div className="node-status">{n.status || "todo"} · {n.id}</div>
-        </div>
-      )
-    },
-    style: nodeStyle(n.status || "todo")
-  }));
+  return (map.nodes || []).map(n => {
+    const notesPreview = (n.notes || "").trim().length > 0
+      ? (n.notes || "").trim().substring(0, 50)
+      : "";
+
+    return {
+      id: n.id,
+      position: { x: Number(n.x || 0), y: Number(n.y || 0) },
+      data: {
+        label: (
+          <div>
+            <div className="node-label">{n.label || n.id}</div>
+            <div className="node-status">{n.status || "todo"} · {n.id}</div>
+            {notesPreview && <div className="node-notes-preview">{notesPreview}</div>}
+            {renderBadges(n)}
+            {renderAttachments(n)}
+          </div>
+        )
+      },
+      style: nodeStyle(n.status || "todo")
+    };
+  });
 }
 
 function toFlowEdges(map) {
@@ -235,6 +326,10 @@ function App() {
     });
   }
 
+  function exportMarkdown() {
+    window.open(`/api/maps/${mapName}/export/markdown`, "_blank");
+  }
+
   return (
     <div className="app">
       <div className="topbar">
@@ -265,6 +360,7 @@ function App() {
         <button className="secondary" onClick={layout}>Auto Layout</button>
         <button className="secondary" onClick={() => loadMap()}>Refresh</button>
         <button className="secondary" onClick={reset}>Reset</button>
+        <button className="secondary" onClick={exportMarkdown}>Export Markdown</button>
       </div>
 
       <div className="canvas">
