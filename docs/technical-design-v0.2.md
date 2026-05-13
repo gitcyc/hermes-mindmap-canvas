@@ -59,15 +59,12 @@ The endpoint should build a tree from edges and output Markdown.
 Example output:
 示例输出：
 
-# Map Title
-# 脑图标题
+# Hermes Agent
 
-- Root
-- 根节点
-  - Child A
-  - 子节点 A
-  - Child B
-  - 子节点 B
+- Hermes Agent [doing]
+  - Mindmap Canvas on Unraid [done]
+    - React Flow 实时刷新 [done]
+  - Discord Gateway [done]
 
 Each node may include status, priority, type, owner, and notes.
 每个节点可以包含 status、priority、type、owner 和 notes。
@@ -116,8 +113,23 @@ Payload:
   "priority": "...",
   "type": "...",
   "owner": "...",
-  "source": "..."
+  "source": "...",
+  "attachments": [
+    {"name": "需求表截图.png", "url": ""}
+  ]
 }
+
+## Double-click Quick Edit
+## 双击快速编辑
+
+Double-clicking a node should open a lightweight quick edit UI.
+双击节点时应该打开轻量级快速编辑 UI。
+
+The quick edit UI should support updating label and notes first.
+快速编辑 UI 第一版先支持更新 label 和 notes。
+
+The implementation can reuse the same update_node API used by the detail panel.
+实现上可以复用详情面板使用的同一个 `update_node` API。
 
 ## Search
 ## 搜索

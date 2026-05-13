@@ -110,3 +110,24 @@ Expected behavior:
 
 - Attachment names also appear in the detail panel.
 - 附件名称也显示在详情面板中。
+
+## Use Case 7: Double-click quick edit
+## 使用场景 7：双击快速编辑
+
+The user double-clicks a node to quickly edit its label or notes.
+用户双击节点，快速编辑节点标题或 notes。
+
+Expected behavior:
+预期行为：
+
+- A quick edit UI appears.
+- 出现快速编辑界面。
+
+- The user can update label or notes.
+- 用户可以更新 label 或 notes。
+
+- The frontend sends an update_node operation.
+- 前端发送 `update_node` 操作。
+
+- The canvas updates in real time.
+- Canvas 实时更新。

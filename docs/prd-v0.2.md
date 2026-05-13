@@ -61,6 +61,9 @@ Main goals:
 7. Export a mindmap as Markdown.
 7. 支持将脑图导出为 Markdown。
 
+8. Allow double-click quick editing on nodes.
+8. 支持双击节点快速编辑。
+
 ## 3. Non-goals
 ## 3. 非目标
 
@@ -132,6 +135,12 @@ As a user, I want to export the mindmap to a Markdown outline for documentation 
 
 As a user, I want attachment names to be displayed near nodes so that I can see what files are related to a node.
 作为用户，我希望节点旁边显示附件名称，这样可以知道该节点关联了哪些文件。
+
+### 4.7 Double-click quick edit
+### 4.7 双击快速编辑
+
+As a user, I want to double-click a node and quickly edit its label or notes.
+作为用户，我希望可以双击节点并快速编辑它的标题或 notes。
 
 ## 5. Data Model
 ## 5. 数据模型
@@ -264,6 +273,9 @@ v0.2 is complete when:
 
 - Markdown export works.
 - Markdown 导出可用。
+
+- Double-clicking a node allows quick editing.
+- 双击节点可以进行快速编辑。
 
 - Existing hermes.json still loads correctly.
 - 现有 `hermes.json` 仍然能正常加载。

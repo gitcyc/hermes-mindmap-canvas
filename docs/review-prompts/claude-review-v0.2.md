@@ -58,6 +58,7 @@ Files to review:
 - docs/prd-v0.2.md
 - docs/use-cases-v0.2.md
 - docs/technical-design-v0.2.md
+- docs/test-plan-v0.2.md
 - app.py
 - static/index.html
 
