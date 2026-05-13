@@ -9,7 +9,7 @@
 
   <style>
     html, body, #root {
-      margin: 0;
+      margin:0;
       width: 100%;
       height: 100%;
       font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -19,6 +19,7 @@
 
     .app {
       display: grid;
+      grid-template-columns: 1fr 360px;
       grid-template-rows: 56px 1fr;
       width: 100%;
       height: 100%;
@@ -31,6 +32,7 @@
       padding: 10px 14px;
       background: #111827;
       border-bottom: 1px solid #374151;
+      grid-column: 1 / -1;
     }
 
     .title {
@@ -39,13 +41,18 @@
       color: #f9fafb;
     }
 
-    input, select, button {
-      border: 1px solid #374151;
+    input, select, button, textarea {
+      border:1px solid #374151;
       background: #1f2937;
       color: #f9fafb;
       border-radius: 8px;
       padding: 8px 10px;
       font-size: 14px;
+    }
+
+    textarea {
+      resize: vertical;
+      font-family: inherit;
     }
 
     button {
@@ -62,12 +69,27 @@
     .canvas {
       width: 100%;
       height: 100%;
+      position: relative;
+    }
+
+    .search-box {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      z-index: 10;
+    }
+
+    .search-box input {
+      width: 200px;
+      background: #1f2937cc;
+      backdrop-filter: blur(4px);
     }
 
     .node-done { background: #064e3b !important; border-color: #10b981 !important; }
     .node-doing { background: #1e3a8a !important; border-color: #60a5fa !important; }
     .node-todo { background: #374151 !important; border-color: #9ca3af !important; }
     .node-blocked { background: #7f1d1d !important; border-color: #f87171 !important; }
+    .node-highlight { box-shadow: 0 0 0 3px #fbbf24, 0 10px 20px rgba(0,0,0,0.25) !important; }
 
     .node-label {
       font-weight: 650;
@@ -127,6 +149,99 @@
       padding: 2px 6px;
       background: #1e3a8a;
       border-radius: 4px;
+    }
+
+    .detail-panel {
+      background: #111827;
+      border-left: 1px solid #374151;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .detail-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .detail-title {
+      font-weight: 700;
+      font-size: 16px;
+      color: #f9fafb;
+    }
+
+    .detail-close {
+      background: none;
+      border: none;
+      color: #9ca3af;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .detail-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .detail-label {
+      font-size: 12px;
+      color: #9ca3af;
+    }
+
+    .detail-value {
+      color: #f9fafb;
+      font-size: 14px;
+    }
+
+    .detail-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: auto;
+    }
+
+    .quick-edit-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    .quick-edit-dialog {
+      background: #111827;
+      border: 1px solid #374151;
+      border-radius: 12px;
+      padding: 20px;
+      width: 400px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .quick-edit-title {
+      font-weight: 700;
+      color: #f9fafb;
+    }
+
+    .quick-edit-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .highlighted {
+      background: #fbbf24 !important;
+      border-color: #f59e0b !important;
     }
   </style>
 </head>
@@ -209,11 +324,36 @@ function renderAttachments(n) {
   );
 }
 
-function toFlowNodes(map) {
+function nodeMatchesSearch(n, searchQuery) {
+  if (!searchQuery) return false;
+  const q = searchQuery.toLowerCase();
+  if ((n.label || "").toLowerCase().includes(q)) return true;
+  if ((n.notes || "").toLowerCase().includes(q)) return true;
+  if ((n.status || "").toLowerCase().includes(q)) return true;
+  if ((n.priority || "").toLowerCase().includes(q)) return true;
+  if ((n.type || "").toLowerCase().includes(q)) return true;
+  if ((n.owner || "").toLowerCase().includes(q)) return true;
+  if ((n.source || "").toLowerCase().includes(q)) return true;
+  const attachments = n.attachments || [];
+  for (const a of attachments) {
+    if ((a.name || "").toLowerCase().includes(q)) return true;
+  }
+  return false;
+}
+
+function toFlowNodes(map, selectedNodeId, searchQuery) {
   return (map.nodes || []).map(n => {
     const notesPreview = (n.notes || "").trim().length > 0
       ? (n.notes || "").trim().substring(0, 50)
       : "";
+
+    const isHighlighted = searchQuery && nodeMatchesSearch(n, searchQuery);
+    const isSelected = n.id === selectedNodeId;
+
+    let style = nodeStyle(n.status || "todo");
+    if (isHighlighted) {
+      style = {...style, boxShadow: "0 0 0 3px #fbbf24, 0 10px 20px rgba(0,0,0,0.25)"};
+    }
 
     return {
       id: n.id,
@@ -227,9 +367,10 @@ function toFlowNodes(map) {
             {renderBadges(n)}
             {renderAttachments(n)}
           </div>
-        )
+        ),
+        nodeData: n
       },
-      style: nodeStyle(n.status || "todo")
+      style
     };
   });
 }
@@ -254,12 +395,22 @@ function App() {
   const [parentId, setParentId] = useState("root");
   const [label, setLabel] = useState("");
   const [status, setStatus] = useState("todo");
+  const [selectedNodeId, setSelectedNodeId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [quickEditNode, setQuickEditNode] = useState(null);
+  const [quickEditLabel, setQuickEditLabel] = useState("");
+  const [quickEditNotes, setQuickEditNotes] = useState("");
+
+  const selectedNode = useMemo(() => {
+    if (!selectedNodeId || !rawMap) return null;
+    return (rawMap.nodes || []).find(n => n.id === selectedNodeId) || null;
+  }, [selectedNodeId, rawMap]);
 
   async function loadMap(name = mapName) {
     const res = await fetch(`/api/maps/${name}`);
     const data = await res.json();
     setRawMap(data);
-    setNodes(toFlowNodes(data));
+    setNodes(toFlowNodes(data, selectedNodeId, searchQuery));
     setEdges(toFlowEdges(data));
   }
 
@@ -285,13 +436,19 @@ function App() {
       const msg = JSON.parse(event.data);
       if (msg.type === "update") {
         setRawMap(msg.map);
-        setNodes(toFlowNodes(msg.map));
+        setNodes(toFlowNodes(msg.map, selectedNodeId, searchQuery));
         setEdges(toFlowEdges(msg.map));
       }
     };
 
     return () => ws.close();
   }, [mapName]);
+
+  useEffect(() => {
+    if (rawMap) {
+      setNodes(toFlowNodes(rawMap, selectedNodeId, searchQuery));
+    }
+  }, [selectedNodeId, searchQuery]);
 
   const onNodeDragStop = useCallback((event, node) => {
     sendOp({
@@ -301,6 +458,23 @@ function App() {
       y: Math.round(node.position.y)
     });
   }, [mapName]);
+
+  const onNodeClick = useCallback((event, node) => {
+    setSelectedNodeId(node.id);
+  }, []);
+
+  const onPaneClick = useCallback(() => {
+    setSelectedNodeId(null);
+  }, []);
+
+  const onNodeDoubleClick = useCallback((event, node) => {
+    const nodeData = node.data?.nodeData;
+    if (nodeData) {
+      setQuickEditNode(nodeData);
+      setQuickEditLabel(nodeData.label || "");
+      setQuickEditNotes(nodeData.notes || "");
+    }
+  }, []);
 
   async function addNode() {
     if (!label.trim()) return;
@@ -324,10 +498,48 @@ function App() {
       title: mapName,
       root_label: mapName
     });
+    setSelectedNodeId(null);
   }
 
   function exportMarkdown() {
     window.open(`/api/maps/${mapName}/export/markdown`, "_blank");
+  }
+
+  async function saveDetail() {
+    if (!selectedNode) return;
+    const nodeData = selectedNode;
+    const updates = {
+      op: "update_node",
+      id: nodeData.id,
+      label: document.getElementById("detail-label").value,
+      status: document.getElementById("detail-status").value,
+      notes: document.getElementById("detail-notes").value,
+      priority: document.getElementById("detail-priority").value,
+      type: document.getElementById("detail-type").value,
+      owner: document.getElementById("detail-owner").value,
+      source: document.getElementById("detail-source").value,
+    };
+    const attachmentsStr = document.getElementById("detail-attachments").value.trim();
+    if (attachmentsStr) {
+      try {
+        updates.attachments = JSON.parse(attachmentsStr);
+      } catch (e) {
+        alert("Attachments must be valid JSON array");
+        return;
+      }
+    }
+    await sendOp(updates);
+  }
+
+  async function saveQuickEdit() {
+    if (!quickEditNode) return;
+    await sendOp({
+      op: "update_node",
+      id: quickEditNode.id,
+      label: quickEditLabel,
+      notes: quickEditNotes
+    });
+    setQuickEditNode(null);
   }
 
   return (
@@ -361,6 +573,14 @@ function App() {
         <button className="secondary" onClick={() => loadMap()}>Refresh</button>
         <button className="secondary" onClick={reset}>Reset</button>
         <button className="secondary" onClick={exportMarkdown}>Export Markdown</button>
+
+        <div style={{flex: 1}} />
+        <input
+          placeholder="Search nodes..."
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          style={{width: 200}}
+        />
       </div>
 
       <div className="canvas">
@@ -370,6 +590,9 @@ function App() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onNodeDragStop={onNodeDragStop}
+          onNodeClick={onNodeClick}
+          onPaneClick={onPaneClick}
+          onNodeDoubleClick={onNodeDoubleClick}
           fitView
         >
           <MiniMap />
@@ -377,6 +600,114 @@ function App() {
           <Background />
         </ReactFlow>
       </div>
+
+      {selectedNode && (
+        <div className="detail-panel">
+          <div className="detail-header">
+            <div className="detail-title">Node Details</div>
+            <button className="detail-close" onClick={() => setSelectedNodeId(null)}>×</button>
+          </div>
+
+          <div className="detail-field">
+            <div className="detail-label">ID</div>
+            <div className="detail-value">{selectedNode.id}</div>
+          </div>
+
+          <div className="detail-field">
+            <div className="detail-label">Label</div>
+            <input id="detail-label" defaultValue={selectedNode.label || ""} style={{width: "100%"}} />
+          </div>
+
+          <div className="detail-field">
+            <div className="detail-label">Status</div>
+            <select id="detail-status" defaultValue={selectedNode.status || "todo"} style={{width: "100%"}}>
+              <option value="todo">todo</option>
+              <option value="doing">doing</option>
+              <option value="done">done</option>
+              <option value="blocked">blocked</option>
+            </select>
+          </div>
+
+          <div className="detail-field">
+            <div className="detail-label">Notes</div>
+            <textarea id="detail-notes" defaultValue={selectedNode.notes || ""} rows={4} style={{width: "100%"}} />
+          </div>
+
+          <div className="detail-field">
+            <div className="detail-label">Priority</div>
+            <select id="detail-priority" defaultValue={selectedNode.priority || ""} style={{width: "100%"}}>
+              <option value="">-</option>
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+              <option value="high">high</option>
+              <option value="urgent">urgent</option>
+            </select>
+          </div>
+
+          <div className="detail-field">
+            <div className="detail-label">Type</div>
+            <select id="detail-type" defaultValue={selectedNode.type || ""} style={{width: "100%"}}>
+              <option value="">-</option>
+              <option value="idea">idea</option>
+              <option value="task">task</option>
+              <option value="decision">decision</option>
+              <option value="fact">fact</option>
+              <option value="issue">issue</option>
+              <option value="resource">resource</option>
+            </select>
+          </div>
+
+          <div className="detail-field">
+            <div className="detail-label">Owner</div>
+            <input id="detail-owner" defaultValue={selectedNode.owner || ""} style={{width: "100%"}} />
+          </div>
+
+          <div className="detail-field">
+            <div className="detail-label">Source</div>
+            <input id="detail-source" defaultValue={selectedNode.source || ""} style={{width: "100%"}} />
+          </div>
+
+          <div className="detail-field">
+            <div className="detail-label">Attachments (JSON array)</div>
+            <textarea id="detail-attachments" defaultValue={JSON.stringify(selectedNode.attachments || [], null, 2)} rows={3} style={{width: "100%", fontFamily: "monospace", fontSize: 12}} />
+          </div>
+
+          <div className="detail-actions">
+            <button onClick={saveDetail}>Save</button>
+            <button className="secondary" onClick={() => setSelectedNodeId(null)}>Close</button>
+          </div>
+        </div>
+      )}
+
+      {quickEditNode && (
+        <div className="quick-edit-overlay" onClick={() => setQuickEditNode(null)}>
+          <div className="quick-edit-dialog" onClick={e => e.stopPropagation()}>
+            <div className="quick-edit-title">Quick Edit: {quickEditNode.id}</div>
+            <div className="detail-field">
+              <div className="detail-label">Label</div>
+              <input
+                value={quickEditLabel}
+                onChange={e => setQuickEditLabel(e.target.value)}
+                style={{width: "100%"}}
+                autoFocus
+              />
+            </div>
+            <div className="detail-field">
+              <div className="detail-label">Notes</div>
+              <textarea
+                value={quickEditNotes}
+                onChange={e => setQuickEditNotes(e.target.value)}
+                rows={4}
+                style={{width: "100%"}}
+              />
+            </div>
+            <div className="quick-edit-actions">
+              <button onClick={saveQuickEdit}>Save</button>
+              <button className="secondary" onClick={() => setQuickEditNode(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
