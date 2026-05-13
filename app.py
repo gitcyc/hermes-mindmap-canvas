@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 DATA_ROOT = Path(os.environ.get("DATA_DIR", "/data"))
@@ -59,7 +59,10 @@ def load_map(name: str) -> dict[str, Any]:
         data = default_map(name)
         save_map(name, data)
         return data
-    return json.loads(p.read_text(encoding="utf-8"))
+    data = json.loads(p.read_text(encoding="utf-8"))
+    data.setdefault("nodes", [])
+    data.setdefault("edges", [])
+    return data
 
 
 def save_map(name: str, data: dict[str, Any]) -> None:
@@ -131,7 +134,8 @@ def update_node(data: dict[str, Any], op: dict[str, Any]) -> dict[str, Any]:
     if not node:
         raise HTTPException(status_code=404, detail=f"node not found: {node_id}")
 
-    for key in ["label", "status", "notes", "x", "y"]:
+    known_fields = ["label", "status", "notes", "x", "y", "priority", "type", "owner", "source", "attachments"]
+    for key in known_fields:
         if key in op:
             node[key] = op[key]
 
@@ -202,6 +206,53 @@ def auto_layout(data: dict[str, Any]) -> dict[str, Any]:
             nodes[node_id]["y"] = i * 120 - (len(ids) - 1) * 60
 
     return {"layout": "done"}
+
+
+def build_tree(data: dict[str, Any]) -> dict[str, Any]:
+    nodes_by_id = {n["id"]: n for n in data.get("nodes", [])}
+    children_map: dict[str, list[str]] = {}
+    for e in data.get("edges", []):
+        children_map.setdefault(e["source"], []).append(e["target"])
+    return nodes_by_id, children_map
+
+
+def render_markdown(nodes_by_id, children_map, node_id, depth=0) -> str:
+    node = nodes_by_id.get(node_id)
+    if not node:
+        return ""
+    indent = "  " * depth
+    line = f"{indent}- {node.get('label', node_id)}"
+    status = node.get("status")
+    if status:
+        line += f" [{status}]"
+    priority = node.get("priority")
+    if priority:
+        line += f" priority:{priority}"
+    ntype = node.get("type")
+    if ntype:
+        line += f" type:{ntype}"
+    owner = node.get("owner")
+    if owner:
+        line += f" owner:{owner}"
+    notes = node.get("notes", "").strip()
+    if notes:
+        note_preview = notes[:80].replace("\n", " ")
+        line += f" — {note_preview}"
+    lines = [line]
+    for child_id in children_map.get(node_id, []):
+        child_lines = render_markdown(nodes_by_id, children_map, child_id, depth + 1)
+        if child_lines:
+            lines.append(child_lines)
+    return "\n".join(lines)
+
+
+def export_markdown(data: dict[str, Any]) -> str:
+    title = data.get("title", "Mindmap")
+    nodes_by_id, children_map = build_tree(data)
+    lines = [f"# {title}\n"]
+    for child_id in children_map.get("root", []):
+        lines.append(render_markdown(nodes_by_id, children_map, child_id, 0))
+    return "\n".join(lines)
 
 
 def apply_op(data: dict[str, Any], op: dict[str, Any]) -> Any:
@@ -298,6 +349,13 @@ async def post_op(name: str, op: dict[str, Any]):
     await broadcast(name, data)
 
     return {"ok": True, "result": result, "map": data}
+
+
+@app.get("/api/maps/{name}/export/markdown")
+async def export_map_markdown(name: str):
+    data = load_map(name)
+    md = export_markdown(data)
+    return PlainTextResponse(content=md, media_type="text/markdown")
 
 
 @app.websocket("/ws/maps/{name}")
