@@ -1,0 +1,291 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Hermes Mindmap Canvas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <link rel="stylesheet" href="https://unpkg.com/reactflow@11/dist/style.css" />
+
+  <style>
+    html, body, #root {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f172a;
+      color: #e5e7eb;
+    }
+
+    .app {
+      display: grid;
+      grid-template-rows: 56px 1fr;
+      width: 100%;
+      height: 100%;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: #111827;
+      border-bottom: 1px solid #374151;
+    }
+
+    .title {
+      font-weight: 700;
+      margin-right: 16px;
+      color: #f9fafb;
+    }
+
+    input, select, button {
+      border: 1px solid #374151;
+      background: #1f2937;
+      color: #f9fafb;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 14px;
+    }
+
+    button {
+      cursor: pointer;
+      background: #2563eb;
+      border-color: #2563eb;
+    }
+
+    button.secondary {
+      background: #374151;
+      border-color: #4b5563;
+    }
+
+    .canvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    .node-done { background: #064e3b !important; border-color: #10b981 !important; }
+    .node-doing { background: #1e3a8a !important; border-color: #60a5fa !important; }
+    .node-todo { background: #374151 !important; border-color: #9ca3af !important; }
+    .node-blocked { background: #7f1d1d !important; border-color: #f87171 !important; }
+
+    .node-label {
+      font-weight: 650;
+      color: #f9fafb;
+      white-space: pre-wrap;
+    }
+
+    .node-status {
+      font-size: 11px;
+      margin-top: 6px;
+      opacity: 0.85;
+      color: #d1d5db;
+    }
+  </style>
+</head>
+
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/reactflow@11/dist/umd/index.js"></script>
+
+<script type="text/babel">
+const {
+  ReactFlow,
+  Background,
+  Controls,
+  MiniMap,
+  useNodesState,
+  useEdgesState
+} = window.ReactFlow;
+
+const { useEffect, useMemo, useState, useCallback } = React;
+
+function nodeStyle(status) {
+  const base = {
+    border: "1px solid #60a5fa",
+    borderRadius: 14,
+    padding: 12,
+    minWidth: 180,
+    maxWidth: 280,
+    color: "#f9fafb",
+    boxShadow: "0 10px 20px rgba(0,0,0,0.25)"
+  };
+
+  if (status === "done") {
+    return {...base, background: "#064e3b", borderColor: "#10b981"};
+  }
+  if (status === "doing") {
+    return {...base, background: "#1e3a8a", borderColor: "#60a5fa"};
+  }
+  if (status === "blocked") {
+    return {...base, background: "#7f1d1d", borderColor: "#f87171"};
+  }
+  return {...base, background: "#374151", borderColor: "#9ca3af"};
+}
+
+function toFlowNodes(map) {
+  return (map.nodes || []).map(n => ({
+    id: n.id,
+    position: { x: Number(n.x || 0), y: Number(n.y || 0) },
+    data: {
+      label: (
+        <div>
+          <div className="node-label">{n.label || n.id}</div>
+          <div className="node-status">{n.status || "todo"} · {n.id}</div>
+        </div>
+      )
+    },
+    style: nodeStyle(n.status || "todo")
+  }));
+}
+
+function toFlowEdges(map) {
+  return (map.edges || []).map(e => ({
+    id: e.id,
+    source: e.source,
+    target: e.target,
+    label: e.label || "",
+    animated: true,
+    style: { stroke: "#93c5fd" },
+    labelStyle: { fill: "#e5e7eb", fontWeight: 600 }
+  }));
+}
+
+function App() {
+  const [mapName, setMapName] = useState("hermes");
+  const [rawMap, setRawMap] = useState(null);
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [parentId, setParentId] = useState("root");
+  const [label, setLabel] = useState("");
+  const [status, setStatus] = useState("todo");
+
+  async function loadMap(name = mapName) {
+    const res = await fetch(`/api/maps/${name}`);
+    const data = await res.json();
+    setRawMap(data);
+    setNodes(toFlowNodes(data));
+    setEdges(toFlowEdges(data));
+  }
+
+  async function sendOp(op) {
+    const res = await fetch(`/api/maps/${mapName}/ops`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(op)
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      alert(JSON.stringify(data));
+    }
+  }
+
+  useEffect(() => {
+    loadMap(mapName);
+
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(`${proto}://${location.host}/ws/maps/${mapName}`);
+
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.type === "update") {
+        setRawMap(msg.map);
+        setNodes(toFlowNodes(msg.map));
+        setEdges(toFlowEdges(msg.map));
+      }
+    };
+
+    return () => ws.close();
+  }, [mapName]);
+
+  const onNodeDragStop = useCallback((event, node) => {
+    sendOp({
+      op: "update_node",
+      id: node.id,
+      x: Math.round(node.position.x),
+      y: Math.round(node.position.y)
+    });
+  }, [mapName]);
+
+  async function addNode() {
+    if (!label.trim()) return;
+    await sendOp({
+      op: "add_node",
+      parent_id: parentId || "root",
+      label: label.trim(),
+      status
+    });
+    setLabel("");
+  }
+
+  async function layout() {
+    await sendOp({op: "layout"});
+  }
+
+  async function reset() {
+    if (!confirm("Reset current mindmap?")) return;
+    await sendOp({
+      op: "reset",
+      title: mapName,
+      root_label: mapName
+    });
+  }
+
+  return (
+    <div className="app">
+      <div className="topbar">
+        <div className="title">Hermes Mindmap Canvas</div>
+
+        <span>Map</span>
+        <input value={mapName} onChange={e => setMapName(e.target.value || "hermes")} style={{width: 130}} />
+
+        <span>Parent</span>
+        <input value={parentId} onChange={e => setParentId(e.target.value)} style={{width: 120}} />
+
+        <input
+          value={label}
+          onChange={e => setLabel(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") addNode(); }}
+          placeholder="New node label"
+          style={{width: 260}}
+        />
+
+        <select value={status} onChange={e => setStatus(e.target.value)}>
+          <option value="todo">todo</option>
+          <option value="doing">doing</option>
+          <option value="done">done</option>
+          <option value="blocked">blocked</option>
+        </select>
+
+        <button onClick={addNode}>Add</button>
+        <button className="secondary" onClick={layout}>Auto Layout</button>
+        <button className="secondary" onClick={() => loadMap()}>Refresh</button>
+        <button className="secondary" onClick={reset}>Reset</button>
+      </div>
+
+      <div className="canvas">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onNodeDragStop={onNodeDragStop}
+          fitView
+        >
+          <MiniMap />
+          <Controls />
+          <Background />
+        </ReactFlow>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

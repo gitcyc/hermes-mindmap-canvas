@@ -1,0 +1,11 @@
+services:
+  mindmap-canvas:
+    build: .
+    container_name: hermes-mindmap-canvas
+    restart: unless-stopped
+    ports:
+      - "9321:9321"
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - /mnt/user/appdata/hermes-mindmap-canvas/data:/data
